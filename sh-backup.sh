@@ -29,6 +29,7 @@ FIND="find"
 TAR="tar"
 CHMOD="chmod"
 ECHO="/bin/echo" # On ubuntu, echo of /bin/sh is too stupid =(
+XARGS_NULL="xargs -0"
 ###########################
 FULL_PREFIX='full'
 WEEKLY_PREFIX='diff'
@@ -83,7 +84,7 @@ make_file_list() {
 
 	$ECHO "$SRC_LIST" | \
 	while read S; do
-		[ -n "$S" ] && mk_fexcl | xargs --null $FIND "$S" -not -type d $* >> $FNAME
+		[ -n "$S" ] && mk_fexcl | $XARGS_NULL $FIND "$S" -not -type d $* >> $FNAME
 	done
 
 	$ECHO $FNAME
@@ -119,7 +120,7 @@ run_tar() {
 	$ECHO "$EXCLUDE_LIST" | \
 	while read E; do
 		[ -n "$E" ] && $ECHO -ne "--exclude\0" && $ECHO -n "$E" && $ECHO -ne "\0"
-	done | xargs --null \
+	done | $XARGS_NULL \
 		$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" 2>&1
 
 	rm -vf $FLIST
