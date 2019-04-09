@@ -1,7 +1,7 @@
 #!/bin/sh
 
 SPACE_CHARS="_"
-EPREFIX="/home/sunx"
+EPREFIX="/home/sunx/"
 
 OUT_DIR="/home/backup/sunx/SunX/new"
 SRC_LIST="/home/sunx"

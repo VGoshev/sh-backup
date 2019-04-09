@@ -65,16 +65,18 @@ make_file_list() {
 
 	echo -n > $FNAME
 
-	FEXCL=""
-	echo "$EXCLUDE_LIST" | (
-	while read E; do
-		[ -n $E ] && FEXCL="${FEXCL} -not -path '$E/*' "
-	done )
+	mk_fexcl() {
+		echo "$EXCLUDE_LIST" | \
+		while read E; do
+			[ -n $E ] && echo -n "-not -path '$E/*' "
+		done
+	}
+	FEXCL=`mk_fexcl`
 
-	echo "$SRC_LIST" | (
+	echo "$SRC_LIST" | \
 	while read S; do
 		[ -n $S ] && /usr/bin/find "$S" $FEXCL -not -type d $* >> $FNAME
-	done )
+	done
 
 	echo $FNAME
 }
@@ -105,11 +107,14 @@ run_tar() {
 	FNAME=$1
 	FLIST=$2
 
-	EXCL=""
-	echo "$EXCLUDE_LIST" | (
-	while read E; do
-		[ -n $E ] && EXCL="${EXCL} --exclude '$E'"
-	done )
+
+	mk_excl () {
+		echo "$EXCLUDE_LIST" | \
+		while read E; do
+			[ -n $E ] && echo -n "--exclude '$E' "
+		done
+	}
+	EXCL=`mk_excl`
 
 	$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" $EXCL 2>&1
 	rm -vf $FLIST
