@@ -1,11 +1,10 @@
 #!/bin/sh
 
-#################################
-#				#
-# Hek-Backup Utility		#
-# Author: Sun][			#
-# Version: 2.1			#
-#################################
+#######################
+# Hek-Backup Utility  #
+# Author: Sun][       #
+# Version: 3.0        #
+#######################
 
 PATH="${PATH}:/bin:/usr/bin"
 
@@ -29,6 +28,7 @@ MKTEMP="mktemp"
 FIND="find"
 TAR="tar"
 CHMOD="chmod"
+ECHO="/bin/echo" # On ubuntu, echo of /bin/sh is too stupid =(
 ###########################
 FULL_PREFIX='full'
 WEEKLY_PREFIX='diff'
@@ -54,7 +54,7 @@ make_file_name() {
 	DATE=$2
 	[ -z "$DATE" ] && DATE=`date +%Y.%m.%d`
 
-	echo "${ATYPE}.${DATE}.${EXTENSION}"
+	$ECHO "${ATYPE}.${DATE}.${EXTENSION}"
 }
 
 #Make list of achived files
@@ -63,22 +63,30 @@ make_file_name() {
 make_file_list() {
 	FNAME=`$MKTEMP $TMPDIR_TPL`
 
-	echo -n > $FNAME
+	$ECHO -n > $FNAME
 
 	mk_fexcl() {
-		echo "$EXCLUDE_LIST" | \
+		$ECHO "$EXCLUDE_LIST" | \
 		while read E; do
-			[ -n $E ] && echo -n "-not -path '$E/*' "
+			if [ -n "$E" ]; then
+				$ECHO -ne "-not\0-path\0"
+				$ECHO -n  "$E/*"
+				$ECHO -ne "\0(\0-path\0"
+				$ECHO -n  "$E"
+				$ECHO -ne "\0-prune\0-o\0-not\0-path\0"
+				$ECHO -n  "$E"
+				$ECHO -ne "\0)\0"
+			fi
 		done
 	}
-	FEXCL=`mk_fexcl`
+	#FEXCL=`mk_fexcl`
 
-	echo "$SRC_LIST" | \
+	$ECHO "$SRC_LIST" | \
 	while read S; do
-		[ -n $S ] && /usr/bin/find "$S" $FEXCL -not -type d $* >> $FNAME
+		[ -n "$S" ] && mk_fexcl | xargs --null $FIND "$S" -not -type d $* >> $FNAME
 	done
 
-	echo $FNAME
+	$ECHO $FNAME
 }
 
 #Delete old archives
@@ -90,9 +98,9 @@ purge_old_backups() {
 		if [ -f "$F" ]; then
 			i=`expr $i + 1`
 			if [ $i -gt $FULL_COUNT ]; then
-				T=`echo "$F" | sed -e "s,^$FULL_PREFIX.,,"`
-				T1=`echo "$T" | cut -d. -f1`
-				T2=`echo "$T" | cut -d. -f2`
+				T=`$ECHO "$F" | sed -e "s,^$FULL_PREFIX.,,"`
+				T1=`$ECHO "$T" | cut -d. -f1`
+				T2=`$ECHO "$T" | cut -d. -f2`
 
 				rm -vf $FULL_PREFIX.$T1.$T2.*.tgz $WEEKLY_PREFIX.$T1.$T2.*.tgz $DAILY_PREFIX.$T1.$T2.*.tgz
 			fi
@@ -108,15 +116,12 @@ run_tar() {
 	FLIST=$2
 
 
-	mk_excl () {
-		echo "$EXCLUDE_LIST" | \
-		while read E; do
-			[ -n $E ] && echo -n "--exclude '$E' "
-		done
-	}
-	EXCL=`mk_excl`
+	$ECHO "$EXCLUDE_LIST" | \
+	while read E; do
+		[ -n "$E" ] && $ECHO -ne "--exclude\0" && $ECHO -n "$E" && $ECHO -ne "\0"
+	done | xargs --null \
+		$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" 2>&1
 
-	$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" $EXCL 2>&1
 	rm -vf $FLIST
 	$CHMOD 0440 $FNAME
 } 
@@ -139,7 +144,7 @@ create_weekly_backup() {
 	for i in `seq $T1 -1 1`; do
 		ii=`expr $i + 0`
 		[ $ii -lt 10 ] && ii="0$ii"
-		T="$T1.$T2.$ii"
+		T="$T3.$T2.$ii"
 		FROM_FILE=`make_file_name "$FULL_PREFIX" "$T"`
 		if [ -f $FROM_FILE ]; then 
 			run_tar $BNAME `make_file_list $FIND_NEWER_ARG $FROM_FILE`
@@ -161,9 +166,9 @@ create_daily_backup() {
 	T3=`date +%Y`
 
 	## From Yesterday Inc Archive
-	ii=`expr $T3 - 1`
+	ii=`expr $T1 - 1`
 	[ $ii -lt 10 ] && ii="0$ii"
-	T="$T1.$T2.$ii"
+	T="$T3.$T2.$ii"
 	FROM_FILE=`make_file_name "$DAILY_PREFIX" "$T"`
 	if [ -f $FROM_FILE ]; then 
 		run_tar $BNAME `make_file_list $FIND_NEWER_ARG $FROM_FILE`
@@ -171,11 +176,11 @@ create_daily_backup() {
 	fi
 
 	## From Weekly Diff Archive
-	WDAY=`dat +%u`
+	WDAY=`date +%u`
 	[ $WDAY = 0 ] && WDAY=7
-	ii=`expr $T3 - $WDAY + $WEEKLY_WDAY`
+	ii=`expr $T1 - $WDAY + $WEEKLY_WDAY`
 	[ $ii -lt 10 ] && ii="0$ii"
-	T="$T1.$T2.$ii"
+	T="$T3.$T2.$ii"
 	FROM_FILE=`make_file_name "$WEEKLY_PREFIX" "$T"`
 	if [ -f $FROM_FILE ]; then 
 		run_tar $BNAME `make_file_list $FIND_NEWER_ARG $FROM_FILE`
@@ -186,7 +191,7 @@ create_daily_backup() {
 	for i in `seq $T1 -1 1`; do
 		ii=`expr $i + 0`
 		[ $ii -lt 10 ] && ii="0$ii"
-		T="$T1.$T2.$ii"
+		T="$T3.$T2.$ii"
 
 		FROM_FILE=`make_file_name "$FULL_PREFIX" "$T"`
 		if [ -f $FROM_FILE ]; then 
