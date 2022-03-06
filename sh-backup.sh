@@ -114,14 +114,18 @@ purge_old_backups() {
 #Arg2 : list of archived files
 run_tar() {
 	FNAME=$1
-	FLIST=$2
+	FLIST=`echo "$2" | sed -e 's/\n//g'`
 
 
 	$ECHO "$EXCLUDE_LIST" | \
-	while read E; do
-		[ -n "$E" ] && $ECHO -ne "--exclude\0" && $ECHO -n "$E" && $ECHO -ne "\0"
-	done | $XARGS_NULL \
-		$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" 2>&1
+	( \
+        while read E; do
+            [ -n "$E" ] && $ECHO -ne "--exclude\0" && $ECHO -n "$E" && $ECHO -ne "\0"
+        done; \
+        $ECHO -ne "-T\0"; $ECHO -n "$FLIST"; $ECHO -ne "\0" \
+    ) | $XARGS_NULL \
+		$TAR $TAR_EXTRA_ARGS -cf "$FNAME" 2>&1
+		#$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" 2>&1
 
 	rm -vf $FLIST
 	$CHMOD 0440 $FNAME
