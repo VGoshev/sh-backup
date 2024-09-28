@@ -1,10 +1,11 @@
 #!/bin/sh
+#set -x
 
-#######################
-# Hek-Backup Utility  #
-# Author: Sun][       #
-# Version: 3.0        #
-#######################
+###########################
+# Hek-Backup Utility      #
+# Author: Vladimir Goshev #
+# Version: 3.1            #
+###########################
 
 PATH="${PATH}:/bin:/usr/bin"
 
@@ -27,9 +28,11 @@ TMPDIR_TPL='/tmp/satarXXXXXXXX'
 MKTEMP="mktemp"
 FIND="find"
 TAR="tar"
+RM="rm"
 CHMOD="chmod"
 ECHO="/bin/echo" # On ubuntu, echo of /bin/sh is too stupid =(
-XARGS_NULL="xargs -0"
+XARGS_NULL="xargs -0 --"
+NONEXISTENT="/nonexistent"
 ###########################
 FULL_PREFIX='full'
 WEEKLY_PREFIX='diff'
@@ -43,6 +46,24 @@ DAILY_PREFIX="inc"
 FULL_PREFIX="${PREFIX}${FULL_PREFIX}"
 WEEKLY_PREFIX="${PREFIX}${WEEKLY_PREFIX}"
 DAILY_PREFIX="${PREFIX}${DAILY_PREFIX}"
+
+# For debug purposes
+#ECHO_ONLY="1"
+if [ "$ECHO_ONLY" = "1" ]; then
+    MKTEMP="mktemp -u"
+    RM="echo rm"
+    TAR="echo tar"
+    FIND="echo find"
+    CHMOD="echo chmod"
+    XARGS_NULL="xargs -0 -t --"
+fi
+
+#FIND_ONLY="1"
+if [ "$FIND_ONLY" = "1" ]; then
+    XARGS_NULL="xargs -0 -t --"
+    trap "exit 1" TERM
+    export TOP_PID=$$
+fi
 
 
 #### Declaration of functions ####
@@ -67,25 +88,39 @@ make_file_list() {
 	$ECHO -n > $FNAME
 
 	mk_fexcl() {
+        $ECHO -ne "-type\0d\0(\0"
 		$ECHO "$EXCLUDE_LIST" | \
 		while read E; do
 			if [ -n "$E" ]; then
-				$ECHO -ne "-not\0-path\0"
+				$ECHO -ne "-path\0"
 				$ECHO -n  "$E/*"
-				$ECHO -ne "\0(\0-path\0"
+				$ECHO -ne "\0-o\0-path\0"
 				$ECHO -n  "$E"
-				$ECHO -ne "\0-prune\0-o\0-not\0-path\0"
-				$ECHO -n  "$E"
-				$ECHO -ne "\0)\0"
+				$ECHO -ne  "\0-o\0"
 			fi
 		done
+        $ECHO -ne "-path\0$NONEXISTENT\0)\0-prune\0-not\0-type\0d\0-o\0"
 	}
+    mk_argv_null() {
+		for E in $*; do
+			if [ -n "$E" ]; then
+                $ECHO -n "$E"
+				$ECHO -ne "\0"
+            fi
+        done
+    }
 	#FEXCL=`mk_fexcl`
 
 	$ECHO "$SRC_LIST" | \
 	while read S; do
-		[ -n "$S" ] && mk_fexcl | $XARGS_NULL $FIND "$S" -not -type d $* >> $FNAME
+        [ -n "$S" ] && ( mk_fexcl; $ECHO -ne "-not\0-type\0d\0"; mk_argv_null $* ) | $XARGS_NULL $FIND "$S" >> $FNAME
 	done
+
+    if [ "$FIND_ONLY" = "1" ]; then
+        kill -s TERM $TOP_PID
+        sleep 1
+        exit 1
+    fi
 
 	$ECHO $FNAME
 }
@@ -103,7 +138,7 @@ purge_old_backups() {
 				T1=`$ECHO "$T" | cut -d. -f1`
 				T2=`$ECHO "$T" | cut -d. -f2`
 
-				rm -vf $FULL_PREFIX.$T1.$T2.*.tgz $WEEKLY_PREFIX.$T1.$T2.*.tgz $DAILY_PREFIX.$T1.$T2.*.tgz
+				$RM -vf $FULL_PREFIX.$T1.$T2.*.tgz $WEEKLY_PREFIX.$T1.$T2.*.tgz $DAILY_PREFIX.$T1.$T2.*.tgz
 			fi
 		fi
 	done
@@ -127,7 +162,7 @@ run_tar() {
 		$TAR $TAR_EXTRA_ARGS -cf "$FNAME" 2>&1
 		#$TAR $TAR_EXTRA_ARGS -cf "$FNAME" -T "$FLIST" 2>&1
 
-	rm -vf $FLIST
+	$RM -vf $FLIST
 	$CHMOD 0440 $FNAME
 } 
 
